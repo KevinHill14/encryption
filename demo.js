@@ -25,6 +25,7 @@ if (mode === "encrypt") {
     // Generate a cipher
     const cipher = crypto.createCipheriv(algorithm, derived_key, iv)
 
+    // Encrypt
     const encrypt_one = cipher.update(plain_text, "utf8", "hex")
     const encrypt_two = cipher.final("hex")
     const tag = cipher.getAuthTag()
@@ -37,6 +38,7 @@ if (mode === "encrypt") {
 } 
 else if (mode === "decrypt") 
 {
+    // Define variables from file
     const content = fs.readFileSync("secret.vault", "utf8")
     const combined = Buffer.from(content, "base64")
     const salt = combined.subarray(0, 16)
@@ -47,6 +49,7 @@ else if (mode === "decrypt")
     // Generate a 256 bit key
     const derived_key = crypto.pbkdf2Sync(password, salt, iterations, key_length, digest)
 
+    // Decipher
     const decipher = crypto.createDecipheriv(algorithm, derived_key, iv)
     decipher.setAuthTag(tag)
 
@@ -59,7 +62,3 @@ else
 {
     console.log("Error in your format, try again!")
 }
-
-   // Decrypt
-    // const decipher = crypto.createDecipheriv(algorithm, derived_key, iv)
-    // decipher.setAuthTag(tag)
