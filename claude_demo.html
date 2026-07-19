@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger & Key — Encrypted Vault</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root{
+    --ink:        #12192B;
+    --ink-2:      #1B2440;
+    --parchment:  #EDE6D6;
+    --parchment-dim: #C9C2AF;
+    --brass:      #C9A24B;
+    --brass-dim:  #8C723A;
+    --income:     #5B9A87;
+    --expense:    #B5533C;
+    --line:       rgba(237,230,214,0.14);
+    --radius: 3px;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: var(--ink);
+    color: var(--parchment);
+    font-family:'IBM Plex Sans', sans-serif;
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:32px 16px;
+  }
+
+  .display{ font-family:'Fraunces', serif; }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+
+  a{ color: var(--brass); }
+
+  /* ---------- Shell ---------- */
+  #app{ width:100%; max-width:980px; }
+
+  .eyebrow{
+    text-transform:uppercase;
+    letter-spacing:0.18em;
+    font-size:11px;
+    color: var(--brass);
+    font-weight:600;
+  }
+
+  /* ---------- Lock screen ---------- */
+  .lock-wrap{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:0;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    overflow:hidden;
+    background: var(--ink-2);
+  }
+  @media (max-width:760px){ .lock-wrap{ grid-template-columns:1fr; } }
+
+  .lock-visual{
+    background:
+      radial-gradient(circle at 50% 42%, rgba(201,162,75,0.10), transparent 60%),
+      var(--ink);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:48px 32px;
+    border-right:1px solid var(--line);
+    position:relative;
+  }
+  @media (max-width:760px){ .lock-visual{ border-right:none; border-bottom:1px solid var(--line); padding:36px; } }
+
+  .dial{ width:200px; height:200px; }
+  .dial-ring{ transition: stroke-dashoffset 0.6s ease; }
+  .dial-needle{ transform-origin:100px 100px; transition: transform 0.5s cubic-bezier(.2,.8,.2,1); }
+
+  .lock-form{ padding:48px 40px; display:flex; flex-direction:column; gap:20px; }
+  @media (max-width:760px){ .lock-form{ padding:32px 28px; } }
+
+  .lock-title{ font-size:30px; font-weight:600; margin:6px 0 2px; letter-spacing:-0.01em; }
+  .lock-sub{ color: var(--parchment-dim); font-size:14px; line-height:1.5; margin:0 0 8px; }
+
+  .mode-toggle{ display:flex; gap:2px; background:var(--ink); border:1px solid var(--line); border-radius:var(--radius); padding:3px; }
+  .mode-btn{
+    flex:1; padding:9px 10px; background:transparent; border:none; color:var(--parchment-dim);
+    font-family:inherit; font-size:13px; font-weight:500; border-radius:2px; cursor:pointer;
+  }
+  .mode-btn.active{ background: var(--brass); color: var(--ink); }
+
+  label.field-label{ font-size:12px; color:var(--parchment-dim); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:6px; display:block; }
+
+  input[type=password], input[type=text], input[type=number], input[type=date], select, textarea{
+    width:100%;
+    background: var(--ink);
+    border:1px solid var(--line);
+    color: var(--parchment);
+    padding:11px 12px;
+    border-radius:var(--radius);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:14px;
+  }
+  input:focus, select:focus, textarea:focus{ outline:2px solid var(--brass); outline-offset:1px; }
+
+  input[type=file]{ color:var(--parchment-dim); font-size:13px; }
+
+  .btn{
+    background: var(--brass);
+    color: var(--ink);
+    border:none;
+    padding:13px 18px;
+    border-radius:var(--radius);
+    font-family:'IBM Plex Sans', sans-serif;
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+    letter-spacing:0.01em;
+  }
+  .btn:hover{ background:#d9b45f; }
+  .btn:disabled{ background:#5a4f38; color:#948a72; cursor:not-allowed; }
+  .btn-ghost{
+    background:transparent; color:var(--parchment); border:1px solid var(--line);
+  }
+  .btn-ghost:hover{ border-color: var(--brass); color: var(--brass); }
+  .btn-danger{ background:transparent; border:1px solid var(--expense); color:var(--expense); }
+
+  .error-msg{ color: var(--expense); font-size:13px; min-height:18px; }
+  .hint{ font-size:12px; color:var(--parchment-dim); line-height:1.5; }
+
+  /* ---------- Dashboard ---------- */
+  .topbar{
+    display:flex; align-items:baseline; justify-content:space-between;
+    margin-bottom:22px; flex-wrap:wrap; gap:12px;
+  }
+  .brand{ display:flex; align-items:baseline; gap:10px; }
+  .brand .display{ font-size:22px; font-weight:600; }
+
+  .topbar-actions{ display:flex; gap:10px; }
+  .btn-sm{ padding:9px 14px; font-size:13px; }
+
+  .cards{
+    display:grid; grid-template-columns: repeat(3, 1fr); gap:14px; margin-bottom:24px;
+  }
+  @media (max-width:700px){ .cards{ grid-template-columns:1fr; } }
+
+  .card{
+    background: var(--ink-2);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:20px 22px;
+  }
+  .card .eyebrow{ margin-bottom:10px; display:block; }
+  .card .figure{ font-size:32px; font-weight:600; letter-spacing:-0.01em; }
+  .card.balance .figure{ color:var(--brass); }
+  .card.income .figure{ color:var(--income); }
+  .card.expense .figure{ color:var(--expense); }
+
+  .layout{ display:grid; grid-template-columns: 1.3fr 1fr; gap:18px; align-items:start; }
+  @media (max-width:820px){ .layout{ grid-template-columns:1fr; } }
+
+  .panel{
+    background: var(--ink-2);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:22px;
+  }
+  .panel-title{ font-size:15px; font-weight:600; margin:0 0 16px; display:flex; justify-content:space-between; align-items:center; }
+
+  /* ledger table */
+  table{ width:100%; border-collapse:collapse; }
+  th{
+    text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.06em;
+    color:var(--parchment-dim); padding:0 8px 10px; font-weight:500; border-bottom:1px solid var(--line);
+  }
+  td{ padding:11px 8px; font-size:13px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tr:last-child td{ border-bottom:none; }
+  td.amount{ font-family:'IBM Plex Mono', monospace; text-align:right; white-space:nowrap; }
+  td.amount.income{ color: var(--income); }
+  td.amount.expense{ color: var(--expense); }
+  .cat-tag{
+    display:inline-block; font-size:11px; padding:2px 7px; border-radius:2px;
+    background:rgba(201,162,75,0.12); color:var(--brass); border:1px solid rgba(201,162,75,0.25);
+  }
+  .del-btn{ background:none; border:none; color:var(--parchment-dim); cursor:pointer; font-size:16px; line-height:1; padding:2px 6px; }
+  .del-btn:hover{ color: var(--expense); }
+  .empty-row td{ text-align:center; color:var(--parchment-dim); padding:30px 8px; font-size:13px; }
+
+  /* add transaction form */
+  .form-row{ display:flex; gap:10px; margin-bottom:12px; }
+  .form-row > div{ flex:1; }
+  .type-toggle{ display:flex; gap:8px; margin-bottom:14px; }
+  .type-btn{
+    flex:1; padding:10px; border-radius:var(--radius); border:1px solid var(--line);
+    background:transparent; color:var(--parchment-dim); font-family:inherit; font-size:13px; font-weight:500; cursor:pointer;
+  }
+  .type-btn.active.income{ border-color:var(--income); color:var(--income); background:rgba(91,154,135,0.1); }
+  .type-btn.active.expense{ border-color:var(--expense); color:var(--expense); background:rgba(181,83,60,0.1); }
+
+  /* cipher preview - signature element */
+  .cipher-box{
+    background: var(--ink);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:14px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    line-height:1.6;
+    color: var(--brass-dim);
+    word-break:break-all;
+    height:120px;
+    overflow:hidden;
+    position:relative;
+  }
+  .cipher-box.updating{ color: var(--brass); }
+  .cipher-fade{
+    position:absolute; bottom:0; left:0; right:0; height:36px;
+    background: linear-gradient(transparent, var(--ink));
+  }
+  .cipher-caption{ font-size:12px; color:var(--parchment-dim); margin-top:10px; line-height:1.5; }
+
+  .status-line{ font-size:12px; color:var(--parchment-dim); margin-top:14px; display:flex; align-items:center; gap:6px; }
+  .dot{ width:6px; height:6px; border-radius:50%; background:var(--income); display:inline-block; }
+  .dot.dirty{ background:var(--brass); }
+
+  ::selection{ background:var(--brass); color:var(--ink); }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>
+/* =====================================================================
+   ENCRYPTION CORE
+   -------------------------------------------------------------------
+   This is the part of the app the whole project exists to teach.
+   Everything else (the UI, the ledger) is just something worth protecting.
+
+   Flow:
+     1. deriveKey()   turns a human passphrase into a real AES key,
+                       using PBKDF2 + a random salt.
+     2. encryptJSON() serializes your data, generates a fresh random IV,
+                       and runs AES-256-GCM to get ciphertext + auth tag.
+     3. decryptJSON() reverses it — and will loudly fail if the password
+                       is wrong OR if the ciphertext was tampered with.
+
+   The exported .vault file is just: [ salt | iv | ciphertext ], all
+   concatenated and base64-encoded. Salt and IV are NOT secret — only
+   the passphrase is. That's the whole trick.
+===================================================================== */
+
+const PBKDF2_ITERATIONS = 250000; // deliberately slow, to resist password-guessing
+
+async function deriveKey(passphrase, salt) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(passphrase),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+// Returns a base64 string containing salt + iv + ciphertext.
+async function encryptJSON(passphrase, dataObj) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));   // fresh every save
+  const iv   = crypto.getRandomValues(new Uint8Array(12));   // fresh every save, never reused
+  const key  = await deriveKey(passphrase, salt);
+
+  const plaintext = new TextEncoder().encode(JSON.stringify(dataObj));
+  const ciphertextBuf = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plaintext);
+  const ciphertext = new Uint8Array(ciphertextBuf);
+
+  const combined = new Uint8Array(salt.length + iv.length + ciphertext.length);
+  combined.set(salt, 0);
+  combined.set(iv, salt.length);
+  combined.set(ciphertext, salt.length + iv.length);
+
+  return bytesToBase64(combined);
+}
+
+// Takes the base64 vault file contents + passphrase, returns the parsed object.
+// Throws if the passphrase is wrong or the file was tampered with (GCM auth tag fails).
+async function decryptJSON(passphrase, base64Blob) {
+  const combined = base64ToBytes(base64Blob);
+  const salt = combined.slice(0, 16);
+  const iv   = combined.slice(16, 28);
+  const ciphertext = combined.slice(28);
+
+  const key = await deriveKey(passphrase, salt);
+  const plaintextBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+  return JSON.parse(new TextDecoder().decode(plaintextBuf));
+}
+
+function bytesToBase64(bytes) {
+  let binary = "";
+  bytes.forEach(b => binary += String.fromCharCode(b));
+  return btoa(binary);
+}
+function base64ToBytes(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/* =====================================================================
+   APP STATE  (in-memory only — the whole point is the FILE is the
+   storage layer, not the browser. Nothing here touches localStorage.)
+===================================================================== */
+
+const state = {
+  screen: "lock",          // 'lock' | 'dashboard'
+  mode: "create",          // 'create' | 'open'
+  passphrase: "",
+  transactions: [],        // {id, type:'income'|'expense', amount, category, note, date}
+  dirty: false,            // true if there are unsaved changes since last export
+  uploadedFile: null,      // base64 contents of an uploaded .vault file, awaiting decryption
+  lastCipherPreview: ""    // last computed ciphertext sample, for the live preview panel
+};
+
+function render() {
+  const app = document.getElementById("app");
+  app.innerHTML = state.screen === "lock" ? renderLock() : renderDashboard();
+  wireEvents();
+}
+
+/* =====================================================================
+   LOCK SCREEN
+===================================================================== */
+
+function renderLock() {
+  const isCreate = state.mode === "create";
+  return `
+    <div class="lock-wrap">
+      <div class="lock-visual">
+        ${dialSVG()}
+      </div>
+      <div class="lock-form">
+        <span class="eyebrow">Ledger &amp; Key</span>
+        <h1 class="lock-title display">${isCreate ? "Open a new vault" : "Unlock your vault"}</h1>
+        <p class="lock-sub">
+          ${isCreate
+            ? "Choose a passphrase. It never leaves this page and is never stored anywhere — it only exists to derive your encryption key. If you lose it, the data is unrecoverable by design."
+            : "Upload a .vault file and enter the passphrase it was saved with."}
+        </p>
+
+        <div class="mode-toggle">
+          <button class="mode-btn ${isCreate ? "active" : ""}" data-mode="create">New vault</button>
+          <button class="mode-btn ${!isCreate ? "active" : ""}" data-mode="open">Open existing</button>
+        </div>
+
+        ${!isCreate ? `
+        <div>
+          <label class="field-label">Vault file (.vault)</label>
+          <input type="file" id="file-input" accept=".vault">
+        </div>` : ""}
+
+        <div>
+          <label class="field-label">Passphrase</label>
+          <input type="password" id="passphrase-input" placeholder="•••••••••••••" autocomplete="off">
+        </div>
+
+        <div class="error-msg" id="lock-error"></div>
+
+        <button class="btn" id="unlock-btn">${isCreate ? "Create vault" : "Decrypt & open"}</button>
+
+        <p class="hint">Under the hood: PBKDF2 (250,000 rounds) derives a 256-bit key from your passphrase and a random salt, then AES-256-GCM encrypts your ledger with a fresh random IV. Nothing is sent anywhere — this all runs locally in your browser.</p>
+      </div>
+    </div>
+  `;
+}
+
+function dialSVG() {
+  return `
+  <svg class="dial" viewBox="0 0 200 200">
+    <circle cx="100" cy="100" r="88" fill="none" stroke="var(--line)" stroke-width="1"/>
+    <circle class="dial-ring" cx="100" cy="100" r="72" fill="none" stroke="var(--brass-dim)" stroke-width="1.5"
+      stroke-dasharray="452" stroke-dashoffset="0"/>
+    ${Array.from({length: 12}).map((_, i) => {
+      const angle = (i / 12) * 2 * Math.PI - Math.PI/2;
+      const x1 = 100 + 80 * Math.cos(angle), y1 = 100 + 80 * Math.sin(angle);
+      const x2 = 100 + 88 * Math.cos(angle), y2 = 100 + 88 * Math.sin(angle);
+      return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="var(--parchment-dim)" stroke-width="1"/>`;
+    }).join("")}
+    <g class="dial-needle" id="dial-needle" style="transform: rotate(0deg)">
+      <line x1="100" y1="100" x2="100" y2="34" stroke="var(--brass)" stroke-width="2.5" stroke-linecap="round"/>
+    </g>
+    <circle cx="100" cy="100" r="6" fill="var(--brass)"/>
+    <text x="100" y="150" text-anchor="middle" fill="var(--parchment-dim)" font-family="IBM Plex Mono" font-size="10" letter-spacing="2">AES · 256 · GCM</text>
+  </svg>`;
+}
+
+/* =====================================================================
+   DASHBOARD
+===================================================================== */
+
+function totals() {
+  const income = state.transactions.filter(t => t.type === "income").reduce((s,t) => s + t.amount, 0);
+  const expense = state.transactions.filter(t => t.type === "expense").reduce((s,t) => s + t.amount, 0);
+  return { income, expense, balance: income - expense };
+}
+
+function fmt(n) {
+  return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
+}
+
+function renderDashboard() {
+  const { income, expense, balance } = totals();
+  const rows = [...state.transactions].sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  return `
+    <div class="topbar">
+      <div class="brand">
+        <span class="display brand-name">Ledger &amp; Key</span>
+        <span class="eyebrow">Vault open</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-ghost btn-sm" id="lock-btn">Lock vault</button>
+        <button class="btn btn-sm" id="save-btn">Save &amp; download .vault</button>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card balance"><span class="eyebrow">Balance</span><div class="figure">${fmt(balance)}</div></div>
+      <div class="card income"><span class="eyebrow">Total income</span><div class="figure">${fmt(income)}</div></div>
+      <div class="card expense"><span class="eyebrow">Total expenses</span><div class="figure">${fmt(expense)}</div></div>
+    </div>
+
+    <div class="layout">
+      <div class="panel">
+        <div class="panel-title"><span>Ledger</span><span class="eyebrow">${rows.length} ${rows.length === 1 ? "entry" : "entries"}</span></div>
+        <table>
+          <thead><tr><th>Date</th><th>Description</th><th>Category</th><th style="text-align:right">Amount</th><th></th></tr></thead>
+          <tbody>
+            ${rows.length === 0
+              ? `<tr class="empty-row"><td colspan="5">No entries yet — add your first transaction to the right.</td></tr>`
+              : rows.map(t => `
+                <tr>
+                  <td class="mono">${t.date}</td>
+                  <td>${escapeHTML(t.note || "—")}</td>
+                  <td><span class="cat-tag">${escapeHTML(t.category)}</span></td>
+                  <td class="amount ${t.type}">${t.type === "expense" ? "−" : "+"}${fmt(t.amount)}</td>
+                  <td><button class="del-btn" data-id="${t.id}" title="Delete entry">✕</button></td>
+                </tr>
+              `).join("")}
+          </tbody>
+        </table>
+      </div>
+
+      <div>
+        <div class="panel" style="margin-bottom:18px;">
+          <div class="panel-title"><span>New entry</span></div>
+          <div class="type-toggle">
+            <button class="type-btn income ${state.newType !== "expense" ? "active" : ""}" data-type="income">Income</button>
+            <button class="type-btn expense ${state.newType === "expense" ? "active" : ""}" data-type="expense">Expense</button>
+          </div>
+          <div class="form-row">
+            <div>
+              <label class="field-label">Amount</label>
+              <input type="number" id="amt-input" placeholder="0.00" step="0.01" min="0">
+            </div>
+            <div>
+              <label class="field-label">Date</label>
+              <input type="date" id="date-input">
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label class="field-label">Category</label>
+              <input type="text" id="cat-input" placeholder="e.g. Groceries">
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label class="field-label">Note</label>
+              <input type="text" id="note-input" placeholder="Optional description">
+            </div>
+          </div>
+          <button class="btn" id="add-btn" style="width:100%;">Add entry</button>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title"><span>Live ciphertext</span></div>
+          <div class="cipher-box mono" id="cipher-box">Add or edit an entry to see it encrypt in real time.<div class="cipher-fade"></div></div>
+          <p class="cipher-caption">This is your actual ledger, encrypted with AES-256-GCM using your passphrase, right now, in this browser. This is what gets written to the .vault file — unreadable without the passphrase.</p>
+          <div class="status-line"><span class="dot ${state.dirty ? "dirty" : ""}"></span>${state.dirty ? "Unsaved changes — download to persist" : "All changes reflected in preview"}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function escapeHTML(str) {
+  const d = document.createElement("div");
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+/* =====================================================================
+   EVENTS
+===================================================================== */
+
+function wireEvents() {
+  if (state.screen === "lock") {
+    document.querySelectorAll(".mode-btn").forEach(btn => {
+      btn.onclick = () => { state.mode = btn.dataset.mode; render(); };
+    });
+
+    const fileInput = document.getElementById("file-input");
+    if (fileInput) {
+      fileInput.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        state.uploadedFile = await file.text();
+      };
+    }
+
+    document.getElementById("unlock-btn").onclick = handleUnlock;
+    document.getElementById("passphrase-input").addEventListener("keydown", e => {
+      if (e.key === "Enter") handleUnlock();
+    });
+  } else {
+    document.getElementById("lock-btn").onclick = () => {
+      state.passphrase = "";
+      state.transactions = [];
+      state.screen = "lock";
+      state.mode = "create";
+      state.uploadedFile = null;
+      render();
+    };
+    document.getElementById("save-btn").onclick = handleSave;
+
+    document.querySelectorAll(".type-btn").forEach(btn => {
+      btn.onclick = () => { state.newType = btn.dataset.type; render(); };
+    });
+
+    document.getElementById("add-btn").onclick = handleAdd;
+
+    document.querySelectorAll(".del-btn").forEach(btn => {
+      btn.onclick = () => {
+        state.transactions = state.transactions.filter(t => t.id !== btn.dataset.id);
+        state.dirty = true;
+        render();
+        updateCipherPreview();
+      };
+    });
+
+    // default date to today
+    const dateInput = document.getElementById("date-input");
+    if (dateInput && !dateInput.value) dateInput.value = new Date().toISOString().slice(0,10);
+
+    updateCipherPreview();
+  }
+}
+
+async function handleUnlock() {
+  const errorEl = document.getElementById("lock-error");
+  const passphrase = document.getElementById("passphrase-input").value;
+  errorEl.textContent = "";
+
+  if (!passphrase || passphrase.length < 4) {
+    errorEl.textContent = "Enter a passphrase (at least 4 characters).";
+    return;
+  }
+
+  if (state.mode === "create") {
+    state.passphrase = passphrase;
+    state.transactions = [];
+    state.dirty = false;
+    state.screen = "dashboard";
+    render();
+  } else {
+    if (!state.uploadedFile) {
+      errorEl.textContent = "Choose a .vault file first.";
+      return;
+    }
+    try {
+      const data = await decryptJSON(passphrase, state.uploadedFile.trim());
+      state.passphrase = passphrase;
+      state.transactions = data.transactions || [];
+      state.dirty = false;
+      state.screen = "dashboard";
+      render();
+    } catch (err) {
+      errorEl.textContent = "Couldn't decrypt — wrong passphrase, or the file was corrupted/tampered with.";
+    }
+  }
+}
+
+function handleAdd() {
+  const amount = parseFloat(document.getElementById("amt-input").value);
+  const date = document.getElementById("date-input").value || new Date().toISOString().slice(0,10);
+  const category = document.getElementById("cat-input").value.trim() || "Uncategorized";
+  const note = document.getElementById("note-input").value.trim();
+  const type = state.newType === "expense" ? "expense" : "income";
+
+  if (!amount || amount <= 0) {
+    document.getElementById("amt-input").focus();
+    return;
+  }
+
+  state.transactions.push({
+    id: crypto.randomUUID(),
+    type, amount, category, note, date
+  });
+  state.dirty = true;
+  render();
+  updateCipherPreview();
+}
+
+async function handleSave() {
+  const blob = await encryptJSON(state.passphrase, { transactions: state.transactions });
+  const file = new Blob([blob], { type: "text/plain" });
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `ledger-${new Date().toISOString().slice(0,10)}.vault`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+
+  state.dirty = false;
+  render();
+}
+
+// Live preview: re-encrypts the current in-memory data (with a throwaway
+// salt/iv, purely for display) so you can literally watch your ledger
+// turn into ciphertext as you edit it.
+let previewDebounce;
+function updateCipherPreview() {
+  clearTimeout(previewDebounce);
+  const box = document.getElementById("cipher-box");
+  if (!box) return;
+  box.classList.add("updating");
+  previewDebounce = setTimeout(async () => {
+    const b64 = await encryptJSON(state.passphrase, { transactions: state.transactions });
+    box.innerHTML = b64.slice(0, 480) + `<div class="cipher-fade"></div>`;
+    box.classList.remove("updating");
+  }, 250);
+}
+
+state.newType = "income";
+render();
+</script>
+</body>
+</html>
